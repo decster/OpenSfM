@@ -269,7 +269,9 @@ def extract_features(color_image, config, mask=None):
         - colors: the color of the center of each feature
     """
     assert len(color_image.shape) == 3
-    color_image = resized_image(color_image, config)
+    resized_color_image = resized_image(color_image, config)
+    ratio = float(color_image.shape[0]) / resized_color_image.shape[0]
+    color_image = resized_color_image
     image = cv2.cvtColor(color_image, cv2.COLOR_RGB2GRAY)
 
     feature_type = config['feature_type'].upper()
@@ -286,6 +288,8 @@ def extract_features(color_image, config, mask=None):
     else:
         raise ValueError('Unknown feature type '
                          '(must be SURF, SIFT, AKAZE, HAHOG or ORB)')
+
+    points[:,2] *= ratio
 
     xs = points[:, 0].round().astype(int)
     ys = points[:, 1].round().astype(int)
