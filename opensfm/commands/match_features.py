@@ -211,7 +211,7 @@ def match(args):
     log.setup()
 
     im1, candidates, i, n, ctx = args
-    logger.info('Matching {}  -  {} / {}'.format(im1, i + 1, n))
+    #logger.info('Matching {}  -  {} / {}'.format(im1, i + 1, n))
 
     config = ctx.data.config
     robust_matching_min_match = config['robust_matching_min_match']
@@ -250,27 +250,29 @@ def match(args):
             i2 = None
 
         matches = matching.match_symmetric(f1, i1, f2, i2, config)
-        logger.debug('{} - {} has {} candidate matches'.format(
-            im1, im2, len(matches)))
         if len(matches) < robust_matching_min_match:
+            logger.debug("Matching {0},{1} {2}/{3} bad".format(
+                im1, im2, 0, len(matches)))
             im1_matches[im2] = []
             continue
 
         # robust matching
-        t_robust_matching = timer()
         camera1 = ctx.cameras[ctx.exifs[im1]['camera']]
         camera2 = ctx.cameras[ctx.exifs[im2]['camera']]
 
         rmatches = matching.robust_match(p1, p2, camera1, camera2, matches,
                                          config)
 
+
         if len(rmatches) < robust_matching_min_match:
             im1_matches[im2] = []
+            logger.debug("Matching {0},{1} {2}/{3} bad".format(
+                im1, im2, len(rmatches), len(matches)))
             continue
-        im1_matches[im2] = rmatches
-        logger.debug('Robust matching time : {0}s'.format(
-            timer() - t_robust_matching))
 
-        logger.debug("Full matching {0} / {1}, time: {2}s".format(
-            len(rmatches), len(matches), timer() - t))
+        logger.debug("Matching {0},{1} {2}/{3}".format(
+            im1, im2, len(rmatches), len(matches)))
+
+        im1_matches[im2] = rmatches
+
     ctx.data.save_matches(im1, im1_matches)

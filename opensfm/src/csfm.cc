@@ -79,6 +79,15 @@ BOOST_PYTHON_MODULE(csfm) {
       )
   );
 
+  def("hadetect", csfm::hadetect,
+      (boost::python::arg("peak_threshold") = 0.003,
+       boost::python::arg("edge_threshold") = 10,
+       boost::python::arg("target_num_features") = 0,
+       boost::python::arg("use_adaptive_suppression") = false,
+       boost::python::arg("sigma") = -1.0
+      )
+  );
+
   def("triangulate_bearings_dlt", csfm::TriangulateBearingsDLT);
   def("triangulate_bearings_midpoint", csfm::TriangulateBearingsMidpoint);
 

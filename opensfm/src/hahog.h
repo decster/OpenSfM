@@ -11,6 +11,13 @@ bp::object hahog(PyObject *image,
                  int target_num_features,
                  bool use_adaptive_suppression);
 
+bp::object hadetect(PyObject *image,
+                     float peak_threshold,
+                     float edge_threshold,
+                     int target_num_features,
+                     bool use_adaptive_suppression,
+                     float sigma);
+
 }
 
 #endif // __HAHOG_H__

@@ -19,6 +19,10 @@ data/berlin/*
 !data/berlin
 !data/berlin/config.yaml
 !data/berlin/images
+data/desk/*
+!data/desk
+!data/desk/images
+!data/desk/config.yaml
 
 # Ignore virtualenv files
 env/*

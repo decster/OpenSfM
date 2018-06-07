@@ -3,6 +3,9 @@ from __future__ import print_function
 
 import argparse
 import os.path
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
