@@ -1,0 +1,16 @@
+# increase matched feature counts in image pair match
+# tool analysis image pair match perf
+# GMS based match
+# rematch after geometric filter(after got fundamental matrix)
+# try learned feature rather than SIFT/HAHOG
+
+# detector learning
+  # bootstrap learning, supervised learning first, then unsupervised
+  # loss design:
+    # input: homography pair pixel wise correspondence
+    # loss: 
+      * sparsity
+      * pixel correspondence ~ featureness correspondence
+
+
+

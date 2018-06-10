@@ -55,3 +55,4 @@ def get_stats(ds):
 if __name__ == '__main__':
     sc, mc = get_stats(sys.argv[1])
     [print(e, ': ', sc[e], '  ', float(sc[e][1]) / max(1, sc[e][0])) for e in sc]
+
