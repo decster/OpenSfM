@@ -1,0 +1,236 @@
+#!/usr/bin/env python3
+
+import os.path, sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+import argparse
+import matplotlib.pyplot as pl
+import numpy as np
+import cv2
+
+from opensfm import dataset
+from opensfm import matching
+from opensfm import multiview
+from opensfm import features
+import opensfm.reconstruction as reconstruct
+
+
+def show_images(plot, im1, im2):
+    h1, w1, c = im1.shape
+    h2, w2, c = im2.shape
+    image = np.zeros((max(h1, h2), w1+w2, 3), dtype=im1.dtype)
+    image[0:h1, 0:w1, :] = im1
+    image[0:h2, w1:(w1+w2), :] = im2
+    plot.imshow(image)
+
+
+def plot_points(plot, im1, im2, p1, p2, point_format1='ob', point_format2='ob'):
+    h1, w1, c = im1.shape
+    h2, w2, c = im2.shape
+    p1d = features.denormalized_image_coordinates(p1, w1, h1)
+    p2d = features.denormalized_image_coordinates(p2, w2, h2)
+
+    plot.plot(p1d[:, 0], p1d[:, 1], point_format1)
+    plot.plot(p2d[:, 0] + w1, p2d[:, 1], point_format2)
+
+
+def plot_matches(plot, im1, im2, p1, p2, line_format='c', point_format='ob'):
+    h1, w1, c = im1.shape
+    h2, w2, c = im2.shape
+    p1d = features.denormalized_image_coordinates(p1, w1, h1)
+    p2d = features.denormalized_image_coordinates(p2, w2, h2)
+    for a, b in zip(p1d, p2d):
+        plot.plot([a[0], b[0] + w1], [a[1], b[1]], line_format)
+
+    plot_points(plot, im1, im2, p1, p2, point_format, point_format)
+
+
+def create_subplot(figure, rows, columns, index, title, width, height, font_size=12):
+    subplot = figure.add_subplot(rows, columns, index)
+    subplot.axis('off')
+    pl.xlim(0, width)
+    pl.ylim(height, 0)
+    subplot.text(0.5, 1.04,
+                 title,
+                 horizontalalignment='center',
+                 fontsize=font_size,
+                 transform=subplot.transAxes)
+
+    return subplot
+
+
+def plot_matches_sub(figure, rows, columns, index, title, im1, im2, p1, p2, line_format, point_format):
+    h1, w1, c = im1_array.shape
+    h2, w2, c = im2_array.shape
+
+    subplot = create_subplot(figure, rows, columns, index, title, w1+w2, h1)
+
+    show_images(subplot, im1, im2)
+    plot_matches(subplot, im1, im2, p1, p2, line_format, point_format)
+
+    return subplot
+
+
+def epipole(F):
+    U, S, VT = np.linalg.svd(F)
+    e = VT[-1]
+
+    return e / e[2]
+
+
+def epipolar_line(F, x):
+    return np.dot(F, x)
+
+
+def line_equation_points(l, xy_min=-1., xy_max=1., n=400):
+    if l[0] > l[1]:
+        y = np.linspace(xy_min, xy_max, n)
+        x = (-l[1] * y - l[2]) / l[0]
+    else:
+        x = np.linspace(xy_min, xy_max, n)
+        y = (-l[0] * x - l[2]) / l[1]
+
+    x = np.resize(x, (x.shape[0], 1))
+    y = np.resize(y, (y.shape[0], 1))
+
+    return np.hstack((x, y))
+
+
+def plot_epipolar_geo(subplot, im1_array, im2_array, x1, x2, F):
+    l1 = epipolar_line(F.T, multiview.homogeneous(x2))
+    l2 = epipolar_line(F, multiview.homogeneous(x1))
+
+    lp1 = line_equation_points(l1)
+    lp2 = line_equation_points(l2)
+
+    e1 = epipole(F)
+    e2 = epipole(F.T)
+
+    lp1 = lp1[lp1[:, 0] <= .5]
+    lp2 = lp2[lp2[:, 0] >= -.5]
+
+    plot_points(subplot, im1_array, im2_array, lp1, lp2, 'r', 'r')
+    plot_points(subplot, im1_array, im2_array, np.resize(e1[:2], (1, 2)), np.resize(e2[:2], (1, 2)), 'or', 'or')
+    plot_points(subplot, im1_array, im2_array, np.resize(x1, (1, 2)), np.resize(x2, (1, 2)), 'ob', 'ob')
+
+
+if __name__ == "__main__":
+
+    np.seterr(all='raise')
+
+    parser = argparse.ArgumentParser(description='Test')
+    parser.add_argument('dataset', help='path to the data set to be processed')
+    parser.add_argument('image1', help='name of the first image to show')
+    parser.add_argument('image2', help='name of the second image to show')
+    parser.add_argument('--threshold', help='Homography map threshold')
+    parser.add_argument('--iterations', help='Number of iterations')
+
+    args = parser.parse_args()
+    data = dataset.DataSet(args.dataset)
+    image1 = args.image1
+    image2 = args.image2
+
+    threshold = args.threshold if args.threshold else 0.3
+    iterations = int(args.iterations) if args.iterations else 1000
+
+    im1_array = data.image_as_array(image1)
+    im2_array = data.image_as_array(image2)
+
+    p1, f1, c1 = data.load_features(image1)
+    i1 = data.load_feature_index(image1, f1)
+
+    p2, f2, c2 = data.load_features(image2)
+    i2 = data.load_feature_index(image2, f2)
+
+    p1 = np.array(p1[:, :2], np.float64)
+    p2 = np.array(p2[:, :2], np.float64)
+
+    symmetric_matches = matching.match_symmetric(f1, i1, f2, i2, data.config)
+
+    fig = pl.figure(figsize=(12, 12))
+    subplot2 = create_subplot(fig, 2, 1, 2, '', im1_array.shape[1]+im2_array.shape[1], im1_array.shape[0])
+    show_images(subplot2, im1_array, im2_array)
+
+    epipoles = []
+    mapped_outliers = []
+    mapped_outlier_iterations = 0
+
+    for i in range(0, iterations, 1):
+
+        arr = np.arange(symmetric_matches.shape[0])
+        np.random.shuffle(arr)
+        shuffled_symmetric_matches = symmetric_matches[arr, :]
+
+        ps1 = p1[shuffled_symmetric_matches[:, 0]]
+        ps2 = p2[shuffled_symmetric_matches[:, 1]]
+
+        fundamental_threshold = data.config.get('robust_matching_threshold', 0.006)
+        F, mask = cv2.findFundamentalMat(ps1, ps2, cv2.FM_RANSAC, fundamental_threshold, 0.9999)
+
+        # OpenCV sometimes returns a fundamental matrix with all values set to zero.
+        if np.max(np.abs(F)) < 1.e-15:
+            continue
+
+        e2 = epipole(F.T)
+        epipoles.append(e2)
+        print('epipole: %.1f %.1f' % (e2[0] * 1024, e2[1] * 1024))
+
+        mask = np.squeeze(mask.astype(np.bool))
+
+        robust_matches = shuffled_symmetric_matches[mask, :]
+
+        robust_matches1 = p1[robust_matches[:, 0]]
+        robust_matches2 = p2[robust_matches[:, 1]]
+
+        homography_threshold = data.config.get('homography_threshold', 0.006)
+        H, inliers = cv2.findHomography(robust_matches1, robust_matches2, cv2.RANSAC, homography_threshold)
+
+        inliers = np.array(np.squeeze(inliers), np.bool)
+
+        inlier_matches = robust_matches[inliers, :]
+        outlier_matches = robust_matches[~inliers, :]
+        print('rmatch: %d outlier: %d' % (len(robust_matches), len(outlier_matches)))
+
+        mapped_outliers_found = False
+        for outlier_h in outlier_matches:
+            outlier_point1 = p1[outlier_h[0]]
+            outlier_point2 = p2[outlier_h[1]]
+
+            mapped_point1 = np.dot(H, multiview.homogeneous(outlier_point1))
+            mapped_point1 = mapped_point1[:2] / mapped_point1[2]
+
+            distance = np.linalg.norm(np.subtract(outlier_point2, mapped_point1))
+
+            if distance > threshold:
+                mapped_outliers.append(np.array([outlier_point1, outlier_point2]))
+
+                plot_epipolar_geo(subplot2, im1_array, im2_array, outlier_point1, outlier_point2, F)
+
+                if not mapped_outliers_found:
+                    mapped_outliers_found = True
+                    mapped_outlier_iterations += 1
+
+        if i % 20 == 0:
+            print('Iteration {0} /{1}'.format(i, iterations))
+
+    epipoles = np.array(epipoles)
+    mapped_outliers = np.array(mapped_outliers)
+
+    epipole_mean = np.mean(epipoles, axis=0)
+
+    print('Epipole mean for {0}: {1}, {2}'.format(image2, epipole_mean[0], epipole_mean[1]))
+    print('Mapped outliers: {0}'.format(mapped_outliers.shape[0]))
+    print('Mapped outlier found in iterations: {0}'.format(mapped_outlier_iterations))
+
+    # Plot last robust matches as a reference.
+    subplot1 = plot_matches_sub(fig, 2, 1, 1, '', im1_array, im2_array, robust_matches1, robust_matches2, 'g', 'oy')
+
+    mapped_outliers = np.array(mapped_outliers)
+
+    if mapped_outliers.shape[0] > 0:
+        mapped_outlier_points1 = mapped_outliers[:, 0, :]
+        mapped_outlier_points2 = mapped_outliers[:, 1, :]
+
+        plot_matches(subplot1, im1_array, im2_array, mapped_outlier_points1, mapped_outlier_points2, 'r', 'ro')
+
+    pl.show()
