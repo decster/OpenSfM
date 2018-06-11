@@ -3,6 +3,7 @@ import sys
 import numpy as np
 import cv2
 import seaborn as sns
+import scipy.misc
 
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
@@ -16,31 +17,41 @@ from opensfm import csfm
 
 def plot_patches_comp(patch, pts, img):
     w, h = img.shape[1], img.shape[0]
-    for i in range(10):
-        x,y = pts[i,0], pts[i,1]
-        plt.subplot(211)
-        plt.imshow(patch[i], cmap='gray')
-        plt.subplot(212)
-        sz = pts[i, 2] * 7.5
-        xs = max(0, int(x - sz))
-        xm = min(w, int(x + sz + 0.5))
-        ys = max(0, int(y - sz))
-        ym = min(h, int(y + sz + 0.5))
-        plt.imshow(img[ys:ym, xs:xm])
+    for s in range(0,50,50):
+        for i in range(50):
+            x,y = pts[s+i,0], pts[s+i,1]
+            plt.subplot(10, 10, 1+i*2)
+            plt.axis('off')
+            plt.imshow(patch[s+i], cmap='gray')
+
+            sz = pts[s+i, 2] * 7.5
+            xs = max(0, int(x - sz))
+            xm = min(w, int(x + sz + 0.5))
+            ys = max(0, int(y - sz))
+            ym = min(h, int(y + sz + 0.5))
+            pth = img[ys:ym, xs:xm]
+            plt.subplot(10, 10, 1+i*2+1)
+            plt.axis('off')
+            plt.imshow(cv2.resize(pth, (32, 32)))
+            scipy.misc.imresize
+
+
+            plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
         plt.show()
 
 
 def plot_patches(patches, nmax=100):
     patches = patches[:nmax]
     SZ = patches[0].shape[0]
+    GSZ = SZ + 1
     N = len(patches)
     NW = 8
     NH = (N + NW - 1) // NW
-    grid = np.zeros((NH*32, NW*32), dtype=np.float32)
+    grid = np.zeros((NH*GSZ, NW*GSZ), dtype=np.float32)
     for i in range(N):
         gy = i // NW
         gx = i % NW
-        grid[gy*32:gy*32+31, gx*32:gx*32+31] = patches[i]
+        grid[gy*GSZ:gy*GSZ+SZ, gx*GSZ:gx*GSZ+SZ] = patches[i]
     plt.imshow(grid, cmap='gray')
     plt.show()
 
@@ -58,13 +69,21 @@ def extract_patches(img, config, smin=0, smax=1000):
         edge_threshold=config['hahog_edge_threshold'],
         target_num_features=config['feature_min_frames'],
         use_adaptive_suppression=config['feature_use_adaptive_suppression'],
-        sigma=config.get('desc_patch_sigma', 0.5))
+        sigma=config.get('desc_patch_sigma', 0.1),
+        patch_size=30)
 
     valid = np.logical_and(p[:,2] >= smin, p[:,2] <= smax)
     p = p[valid]
     patches = patches[valid]
-    plot_patches_comp(patches, p, resized_color_image)
-    return p, patches
+
+    # resize to (32, 32)
+    patches_resized = np.zeros((len(patches), 32, 32), dtype=np.float32)
+    for i in range(len(patches)):
+        patches_resized[i, :, :] = scipy.misc.imresize(patches[i], (32, 32))
+
+    print('p shape: %r  patches shape: %r patches_resized shape %r' % (p.shape, patches.shape, patches_resized.shape))
+    plot_patches_comp(patches_resized, p, resized_color_image)
+    return p, patches_resized
 
 
 def extract_features(img, config, smin=0, smax=1000):
@@ -106,10 +125,9 @@ def draw_match(img1, img2, p1, p2, matches, rmatches):
     plt.gca().add_collection(collection)
 
     if matches is not None:
-        matches = np.array(list(set([(e[0], e[1]) for e in matches]) - set([(e[0], e[1]) for e in rmatches])), dtype=np.int32)
-        matches = matches[:100]
-        p1 = p1[matches[:, 0]]
-        p2 = p2[matches[:, 1]]
+        not_matches = np.array(list(set([(e[0], e[1]) for e in matches]) - set([(e[0], e[1]) for e in rmatches])), dtype=np.int32)
+        p1 = p1[rmatches[:, 0]]
+        p2 = p2[rmatches[:, 1]]
         for a, b in zip(p1, p2):
             plt.plot([a[0], b[0]], [a[1], b[1] + h1], 'c')
     plt.show()
@@ -118,7 +136,7 @@ def draw_match(img1, img2, p1, p2, matches, rmatches):
 def onedir_match(f1, f2, reverse=False):
     mr = cv2.DescriptorMatcher_create('BruteForce')
     mts = mr.match(f2, f1)
-    mts = [e for e in mts if e.distance<0.8]
+    #mts = [e for e in mts if e.distance<0.8]
     matches = [(e.queryIdx, e.trainIdx) if reverse else (e.trainIdx, e.queryIdx)  for e in mts]
     mdists = [e.distance for e in mts]
     return matches, mdists
@@ -143,34 +161,31 @@ img2 = data.image_as_array('IMG_20180606_104145.jpg')
 #img2 = data.image_as_array('IMG_20180606_104150.jpg')
 size_range = [3.0, 30]
 
-p1, patches1 = extract_patches(img1, cfg, size_range[0], size_range[1])
-#plot_patches(patches1)
 
+p1, f1, c1 = extract_features(img1, cfg, size_range[0], size_range[1])
+p2, f2, c2 = extract_features(img2, cfg, size_range[0], size_range[1])
 
-# p1, f1, c1 = extract_features(img1, cfg, size_range[0], size_range[1])
-# p2, f2, c2 = extract_features(img2, cfg, size_range[0], size_range[1])
-#
-# if False:
-#     match12, dis12 = onedir_match(f1, f2)
-#     match21, dis21 = onedir_match(f2, f1, reverse=True)
-#     match_set = set(match12).intersection(match21)
-#     matches = np.array(list(match_set), dtype=np.int32)
-#     dists = np.array([d for i, d in enumerate(dis12) if match12[i] in match_set], dtype=np.float32)
-#     rmatches = matching.robust_match_fundamental(p1, p2, matches, cfg)
-#     print("match [%d : %d] 1->2: %d 2->1: %d symetric: %d robust: %d" % (
-#         len(p1), len(p2), len(match12), len(match21), len(matches), len(rmatches)))
-#     # sizes = np.concatenate([p1[matches[:, 0], 2], p2[matches[:, 1], 2]])
-#     # rsizes = np.concatenate([p1[rmatches[:, 0], 2], p2[rmatches[:, 1], 2]])
-#     # stripplot_multi(sizes, rsizes)
-# else:
-#     i1 = features.build_flann_index(f1, cfg)
-#     i2 = features.build_flann_index(f2, cfg)
-#     cfg['lowes_ratio'] = 1.0
-#     matches = matching.match_symmetric(f1, i1, f2, i2, cfg)
-#     rmatches = matching.robust_match_fundamental(p1, p2, matches, cfg)
-#     print("match [%d : %d] symetric: %d robust: %d" % (
-#         len(p1), len(p2), len(matches), len(rmatches)))
-#
+if True:
+    match12, dis12 = onedir_match(f1, f2)
+    match21, dis21 = onedir_match(f2, f1, reverse=True)
+    match_set = set(match12).intersection(match21)
+    matches = np.array(list(match_set), dtype=np.int32)
+    dists = np.array([d for i, d in enumerate(dis12) if match12[i] in match_set], dtype=np.float32)
+    rmatches = matching.robust_match_fundamental(p1, p2, matches, cfg)
+    print("match [%d : %d] 1->2: %d 2->1: %d symetric: %d robust: %d" % (
+        len(p1), len(p2), len(match12), len(match21), len(matches), len(rmatches)))
+    # sizes = np.concatenate([p1[matches[:, 0], 2], p2[matches[:, 1], 2]])
+    # rsizes = np.concatenate([p1[rmatches[:, 0], 2], p2[rmatches[:, 1], 2]])
+    # stripplot_multi(sizes, rsizes)
+else:
+    i1 = features.build_flann_index(f1, cfg)
+    i2 = features.build_flann_index(f2, cfg)
+    #cfg['lowes_ratio'] = 1.0
+    matches = matching.match_symmetric(f1, i1, f2, i2, cfg)
+    rmatches = matching.robust_match_fundamental(p1, p2, matches, cfg)
+    print("match [%d : %d] symetric: %d robust: %d" % (
+        len(p1), len(p2), len(matches), len(rmatches)))
+
 # draw_match(img1, img2, p1, p2, matches, rmatches)
 
 # rmatchset = set((e[0], e[1]) for e in rmatches)

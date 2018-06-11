@@ -84,7 +84,8 @@ BOOST_PYTHON_MODULE(csfm) {
        boost::python::arg("edge_threshold") = 10,
        boost::python::arg("target_num_features") = 0,
        boost::python::arg("use_adaptive_suppression") = false,
-       boost::python::arg("sigma") = -1.0
+       boost::python::arg("sigma") = -1.0,
+       boost::python::arg("patch_size") = 15
       )
   );
 

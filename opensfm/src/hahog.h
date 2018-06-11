@@ -16,7 +16,8 @@ bp::object hadetect(PyObject *image,
                      float edge_threshold,
                      int target_num_features,
                      bool use_adaptive_suppression,
-                     float sigma);
+                     float sigma,
+                     int patch_size);
 
 }
 

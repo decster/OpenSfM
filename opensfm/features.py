@@ -7,6 +7,7 @@ import cv2
 
 from opensfm import context
 from opensfm import csfm
+from opensfm import hardnet
 
 logger = logging.getLogger(__name__)
 
@@ -233,18 +234,6 @@ def extract_features_hahog(image, config):
     return points, desc
 
 
-def extract_features_hardnet(image, config):
-    t = time.time()
-    points, patches = csfm.hadetect(
-        image.astype(np.float32) / 255,  # VlFeat expects pixel values between 0, 1
-        peak_threshold=config['hahog_peak_threshold'],
-        edge_threshold=config['hahog_edge_threshold'],
-        target_num_features=config['feature_min_frames'],
-        use_adaptive_suppression=config['feature_use_adaptive_suppression'],
-        sigma=config.get('desc_patch_sigma', 0.5))
-    logger.debug('Found {0} points in {1}s'.format(len(points), time.time() - t))
-    return points, desc
-
 def extract_features_orb(image, config):
     if context.OPENCV3:
         detector = cv2.ORB_create(nfeatures=int(config['feature_min_frames']))
@@ -298,7 +287,7 @@ def extract_features(color_image, config, mask=None):
     elif feature_type == 'ORB':
         points, desc = extract_features_orb(image, config)
     elif feature_type == 'HARDNET':
-        points, desc = extract_features_hardnet(image, config)
+        points, desc = hardnet.extract_hardnet(image, config)
     else:
         raise ValueError('Unknown feature type '
                          '(must be SURF, SIFT, AKAZE, HAHOG or ORB)')

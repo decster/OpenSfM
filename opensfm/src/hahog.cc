@@ -122,7 +122,8 @@ bp::object hadetect(PyObject *image,
                      float edge_threshold,
                      int target_num_features,
                      bool use_adaptive_suppression,
-                     float sigma) {
+                     float sigma,
+                     int patch_size) {
   PyArrayContiguousView<float> im((PyArrayObject *)image);
 
   if (im.valid()) {
@@ -160,7 +161,7 @@ bp::object hadetect(PyObject *image,
     vl_size numFeatures = vl_covdet_get_num_features(covdet);
     VlCovDetFeature const *feature = (VlCovDetFeature const *)vl_covdet_get_features(covdet);
     vl_index i;
-    vl_index patchResolution = 15;
+    vl_index patchResolution = patch_size;
     double patchRelativeExtent = 7.5;
     double patchRelativeSmoothing = sigma < 0 ? 1 : sigma;
     vl_size patchSide = 2 * patchResolution + 1;
