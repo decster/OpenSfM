@@ -164,7 +164,7 @@ if __name__ == "__main__":
         ps1 = p1[shuffled_symmetric_matches[:, 0]]
         ps2 = p2[shuffled_symmetric_matches[:, 1]]
 
-        fundamental_threshold = data.config.get('robust_matching_threshold', 0.006)
+        fundamental_threshold = data.config.get('robust_matching_threshold', 0.001)
         F, mask = cv2.findFundamentalMat(ps1, ps2, cv2.FM_RANSAC, fundamental_threshold, 0.9999)
 
         # OpenCV sometimes returns a fundamental matrix with all values set to zero.
@@ -173,7 +173,6 @@ if __name__ == "__main__":
 
         e2 = epipole(F.T)
         epipoles.append(e2)
-        print('epipole: %.1f %.1f' % (e2[0] * 1024, e2[1] * 1024))
 
         mask = np.squeeze(mask.astype(np.bool))
 
@@ -182,6 +181,8 @@ if __name__ == "__main__":
         robust_matches1 = p1[robust_matches[:, 0]]
         robust_matches2 = p2[robust_matches[:, 1]]
 
+        print('F %s epipole: %8.1f %8.1f match: %4d/%4d' % (','.join('%8.2f' % e for e in np.ravel(F)), e2[0] * 1024, e2[1] * 1024, len(robust_matches), len(shuffled_symmetric_matches)))
+
         homography_threshold = data.config.get('homography_threshold', 0.006)
         H, inliers = cv2.findHomography(robust_matches1, robust_matches2, cv2.RANSAC, homography_threshold)
 
@@ -189,7 +190,6 @@ if __name__ == "__main__":
 
         inlier_matches = robust_matches[inliers, :]
         outlier_matches = robust_matches[~inliers, :]
-        print('rmatch: %d outlier: %d' % (len(robust_matches), len(outlier_matches)))
 
         mapped_outliers_found = False
         for outlier_h in outlier_matches:
@@ -209,9 +209,6 @@ if __name__ == "__main__":
                 if not mapped_outliers_found:
                     mapped_outliers_found = True
                     mapped_outlier_iterations += 1
-
-        if i % 20 == 0:
-            print('Iteration {0} /{1}'.format(i, iterations))
 
     epipoles = np.array(epipoles)
     mapped_outliers = np.array(mapped_outliers)
